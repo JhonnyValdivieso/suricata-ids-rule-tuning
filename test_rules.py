@@ -36,8 +36,8 @@ def main():
 
     # Test 3: SQL Injection Attempt
     run_command(
-        "3/3 - SQL Injection Attempt (HTTP UNION)",
-        'docker run --rm --network host alpine wget -qO- "http://127.0.0.1:2376/index.php?id=1 UNION SELECT 1,2,3--"'
+    "3/3 - SQL Injection Attempt (HTTP UNION)",
+    'docker run --rm --network host alpine wget -qO- --timeout=3 "http://192.168.65.3/index.php?id=1%20UNION%20SELECT%201,2,3--"'
     )
 
     print_header("✅ ALL TESTS EXECUTED - CHECK YOUR FAST.LOG MONITOR")
