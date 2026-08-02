@@ -9,7 +9,7 @@ services:
       - NET_ADMIN
       - SYS_NICE
       - NET_RAW
-    command: -i eth0 -S /var/lib/suricata/rules/local.rules
+    command: -i eth0 -i lo -S /var/lib/suricata/rules/local.rules
     volumes:
       - ./rules/local.rules:/var/lib/suricata/rules/local.rules
       - ./logs:/var/log/suricata
