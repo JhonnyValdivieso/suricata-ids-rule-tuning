@@ -120,7 +120,7 @@ Final `fast.log` output — one alert per attack vector, no duplicate noise:
 ```
 08/02/2026-19:15:02.113182  [**] [1:1000001:4] [IDS ALERT] ICMP Network Discovery Detected [**] [Classification: Not Suspicious Traffic] [Priority: 3] {ICMP} 192.168.65.3:8 -> 1.1.1.1:0
 08/02/2026-19:15:07.305996  [**] [1:1000002:9] [IDS ALERT] Nmap SYN Port Scan Detected [**] [Classification: Attempted Information Leak] [Priority: 2] {TCP} 192.168.65.3:64293 -> 1.1.1.1:65
-08/02/2026-19:15:16.069929  [**] [1:1000003:13] [IDS ALERT] SQL Injection Attempt Detected - UNION-based [**] [Classification: Web Application Attack] [Priority: 1] {TCP} 192.168.65.3:41106 -> 1.1.1.1:80
+08/02/2026-19:15:16.069929  [**] [1:1000003:13] [IDS ALERT] SQL Injection Attempt Detected - UNION-based [**] [Classification: Web Application Attack] [Priority: 1] {TCP} 192.168.65.3:41106 -> 192.168.65.3:80
 ```
  
 ---
