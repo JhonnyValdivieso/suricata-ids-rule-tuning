@@ -1,4 +1,4 @@
-# 🛡️ Suricata IDS: Rule Tuning & Noise Reduction Lab
+# Suricata IDS: Rule Tuning & Noise Reduction Lab
 
 [![Suricata](https://img.shields.io/badge/IDS-Suricata_v8.0-orange.svg)](https://suricata.io/)
 [![Docker Desktop](https://img.shields.io/badge/Platform-Docker_Desktop-2496ED.svg)](https://www.docker.com/)
@@ -9,7 +9,7 @@ A hands-on Network Intrusion Detection System (NIDS) lab focused on designing cu
 
 ---
 
-## 📌 Executive Summary
+## Executive Summary
 
 High volume of noise and unoptimized signatures in Intrusion Detection Systems leads to **alert fatigue**, masking critical security events inside Security Operations Centers (SOC).
 
@@ -17,7 +17,7 @@ This project simulates a controlled containerized environment where network atta
 
 ---
 
-## 🏗️ Architecture & Component Overview
+## Architecture & Component Overview
 
 The laboratory operates within a lightweight Docker-isolated environment on top of Docker Desktop (Windows/WSL2 backend):
 
@@ -44,7 +44,7 @@ graph TD
 
 ---
 
-## 📝 Signature Engineering (`rules/local.rules`)
+## Signature Engineering (`rules/local.rules`)
 
 ```snort
 # 1. ICMP Network Discovery Detection
@@ -68,7 +68,7 @@ alert http any any -> any any (msg:"[IDS ALERT] SQL Injection Attempt Detected -
 | `classtype`, `metadata` (MITRE ATT&CK), `rev` | Severity classification, threat-intel mapping, version tracking | ⚪ Cosmetic/documentation — does not affect detection logic, but demonstrates SOC-oriented rule design |
 
 ---
-## ⚡ Alert Tuning & Noise Reduction Methodology
+## Alert Tuning & Noise Reduction Methodology
 
 | Signature ID | Target Event | Iteration 1 (Initial Problem) | Iteration 2 (First Fix Attempt) | Iteration 3 (Final Solution) |
 |---|---|---|---|---|
@@ -77,7 +77,7 @@ alert http any any -> any any (msg:"[IDS ALERT] SQL Injection Attempt Detected -
 | SID: 1000003 | SQL Injection | `content:"UNION"` matched anywhere in the raw payload — high false-positive risk, no HTTP anchoring | Anchored to `http.uri` with `distance:0` — silently never matched, because the decoded URI has a real space character between `UNION` and `SELECT` | ✅ `distance:1; within:20;` correctly accounts for the space, matching the real `UNION SELECT` pattern |
 
 ---
-## 🔍 Root Cause Analysis: Why the SQLi Rule Stayed Silent (Loopback vs. Interface Capture)
+## Root Cause Analysis: Why the SQLi Rule Stayed Silent (Loopback vs. Interface Capture)
 
 This was the most valuable debugging session of the project, and worth documenting in detail because the root cause was **not** in the rule syntax.
 
@@ -103,7 +103,7 @@ command: -i eth0 -i lo -S /var/lib/suricata/rules/local.rules
 
 ---
 
-## 🧪 Validation & Evidence
+## Validation & Evidence
 
 ### 1. Automated Execution Suite
  
@@ -125,7 +125,7 @@ Final `fast.log` output — one alert per attack vector, no duplicate noise:
  
 ---
  
-## 📁 Repository Structure
+## Repository Structure
  
 ```
 suricata-ids-rule-tuning/
@@ -139,7 +139,7 @@ suricata-ids-rule-tuning/
 ```
  
 ---
-## 🧠 Key Technical Takeaways
+## Key Technical Takeaways
 
 - **Threshold engineering:** Understood the practical difference between `threshold: type limit`, `detection_filter`, and `threshold: type both` — and why only the last one correctly combines "require real attack volume" with "suppress duplicate noise."
 - **HTTP-layer anchoring:** Moved from raw TCP payload matching to `http.uri`-anchored, multi-token detection to eliminate false positives in the SQLi signature.
@@ -147,7 +147,7 @@ suricata-ids-rule-tuning/
 - **SOC Efficiency:** Demonstrated how proper thresholding directly improves SIEM ingestion costs and analyst response speed.
 - **Threat Intelligence Mapping:** Tagged custom signatures with MITRE ATT&CK techniques (T1046, T1190) for SOC-standard triage.
 
-## ⚠️ Known Limitations
+## Known Limitations
 
 - Detection of "many SYNs from one source" does not distinguish a single-port repeated connection attempt from a genuine multi-port scan; true multi-port scan correlation would require aggregating `eve.json` events by `src_ip` + unique `dest_port` count in a SIEM, rather than relying on the Suricata rule alone.
 - The lab runs on Docker Desktop for Windows, which means Suricata observes the Docker Desktop VM's virtual interfaces, not native Windows host traffic.
