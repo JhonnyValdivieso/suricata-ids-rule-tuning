@@ -52,11 +52,11 @@ alert icmp any any -> any any (msg:"[IDS ALERT] ICMP Network Discovery Detected"
 
 # 2. Nmap SYN Port Scan Detection
 # Triggered by rapid SYN flag sequences, ignoring single-packet TCP handshakes from local host interfaces.
-alert tcp any any -> any any (msg:"[IDS ALERT] Nmap SYN Port Scan Detected"; flags:S; threshold: type limit, track by_src, count 1, seconds 10; classtype:attempted-recon; sid:1000002; rev:5;)
+alert tcp any any -> any !2376 (msg:"[IDS ALERT] Nmap SYN Port Scan Detected"; flags:S; threshold: type limit, track by_src, count 1, seconds 10; classtype:attempted-recon; sid:1000002; rev:6;)
 
 # 3. SQL Injection Attack Detection
 # Detects 'UNION' payloads over HTTP TCP streams, rate-limited to 1 alert per session burst.
-alert tcp any any -> any any (msg:"[IDS ALERT] SQL Injection Attempt Detected"; content:"UNION"; nocase; threshold: type limit, track by_src, count 1, seconds 10; classtype:web-application-attack; sid:1000003; rev:10;)
+alert tcp any any -> any any (msg:"[IDS ALERT] SQL Injection Attempt Detected"; flow:to_server,established; content:"UNION"; nocase; threshold: type limit, track by_src, count 1, seconds 10; classtype:web-application-attack; sid:1000003; rev:11;)
 ```
 ## ⚡ Alert Tuning & Noise Reduction Methodology
 
