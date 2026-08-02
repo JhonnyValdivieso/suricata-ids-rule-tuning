@@ -15,6 +15,7 @@ High volume of noise and unoptimized signatures in Intrusion Detection Systems l
 
 This project simulates a controlled containerized environment where network attack vectors (ICMP discovery, TCP SYN scanning, and Web Application SQL Injection) are launched against custom signatures. Through **three full iterations of tuning** — including a real production-style debugging session covering rule logic, payload encoding, and network interface capture scope — the log volume was reduced from redundant, misleading, or entirely missing alerts to **exact, high-fidelity, one-event-per-attack detections**.
 
+![Project overview: from alert fatigue to precision tuning](assets/ids-tuning-process.png)
 ---
 
 ## Architecture & Component Overview
