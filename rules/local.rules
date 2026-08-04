@@ -1,8 +1,0 @@
-# 1. ICMP Network Discovery Detection
-alert icmp any any -> any any (msg:"[IDS ALERT] ICMP Network Discovery Detected"; itype:8; threshold: type limit, track by_src, count 1, seconds 30; classtype:not-suspicious; sid:1000001; rev:4;)
-
-# 2. Nmap SYN Port Scan Detection
-alert tcp any any -> any !2376 (msg:"[IDS ALERT] Nmap SYN Port Scan Detected"; flags:S; threshold: type both, track by_src, count 10, seconds 15; classtype:attempted-recon; metadata:mitre_tactic Reconnaissance, mitre_technique T1046; sid:1000002; rev:9;)
-
-# 3. SQL Injection Detection
-alert http any any -> any any (msg:"[IDS ALERT] SQL Injection Attempt Detected - UNION-based"; flow:to_server,established; http.uri; content:"UNION"; nocase; content:"SELECT"; nocase; distance:1; within:20; classtype:web-application-attack; metadata:mitre_tactic Initial-Access, mitre_technique T1190; threshold: type both, track by_src, count 1, seconds 10; sid:1000003; rev:13;)
