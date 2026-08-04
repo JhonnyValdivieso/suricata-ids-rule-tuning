@@ -1,11 +1,11 @@
 # Suricata IDS: Rule Tuning & Noise Reduction Lab
 
-[![Suricata](https://img.shields.io/badge/IDS-Suricata_v8.0-orange.svg)](https://suricata.io/)
+[![Suricata](https://img.shields.io/badge/IDS-Suricata_v7.0-orange.svg)](https://suricata.io/)
 [![Docker Desktop](https://img.shields.io/badge/Platform-Docker_Desktop-2496ED.svg)](https://www.docker.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![SOC Operations](https://img.shields.io/badge/Focus-SOC_Alert_Tuning-blue.svg)]()
+[![SOC Operations](https://img.shields.io/badge/Focus-SOC_Alert_Tuning-blue.svg)](https://github.com/JhonnyValdivieso/suricata-ids-rule-tuning/blob/main)
 
-A hands-on Network Intrusion Detection System (NIDS) lab focused on designing custom Suricata detection rules, analyzing raw telemetry, and applying **Alert Tuning** techniques to eliminate false positives and alert fatigue without compromising security coverage.
+A hands-on Network Intrusion Detection System (NIDS) lab focused on designing custom Suricata detection rules, analyzing raw telemetry, and applying **Alert Tuning** techniques to eliminate false positives and alert fatigue without compromising security coverage — all backed by an **automated test suite that verifies every rule against Suricata's own `eve.json`**.
 
 ---
 
@@ -13,152 +13,243 @@ A hands-on Network Intrusion Detection System (NIDS) lab focused on designing cu
 
 High volume of noise and unoptimized signatures in Intrusion Detection Systems leads to **alert fatigue**, masking critical security events inside Security Operations Centers (SOC).
 
-This project simulates a controlled containerized environment where network attack vectors (ICMP discovery, TCP SYN scanning, and Web Application SQL Injection) are launched against custom signatures. Through **three full iterations of tuning** — including a real production-style debugging session covering rule logic, payload encoding, and network interface capture scope — the log volume was reduced from redundant, misleading, or entirely missing alerts to **exact, high-fidelity, one-event-per-attack detections**.
+This project builds a fully isolated, containerized environment where five attack vectors — ICMP discovery, TCP SYN scanning, and three classes of Web Application SQL Injection — are launched against custom signatures. Every signature is validated by an automated Python suite that does not merely fire the attack, but **confirms in `eve.json` that the expected alert was generated** (and, for benign traffic, that it was *not*).
 
-![Project overview: from alert fatigue to precision tuning](assets/IDS_Tuning_Process.png)
+Beyond building the rules, the lab produced three documented **detection findings**: a signature-evasion gap in a byte-window rule, a notification blind spot created by alert thresholds, and a verification that forensic logging survives that blind spot. These are the difference between "rules that look right" and "rules I have tested and understand the failure modes of."
+
+## Project Overview: From Alert Fatigue to Precision Tuning
+
+<!-- INFOGRAPHIC PLACEHOLDER -->
+<!-- Add your notebook summary infographic here, e.g.: -->
+![IDS Tuning Process](assets/IDS_Tuning_Process.png)
+
 ---
 
 ## Architecture & Component Overview
 
-The laboratory operates within a lightweight Docker-isolated environment on top of Docker Desktop (Windows/WSL2 backend):
+The laboratory operates within a lightweight Docker-isolated environment on top of Docker Desktop (Windows/WSL2 backend). Three containers share one **isolated bridge network** (`lab_net`):
 
-```mermaid
+```
 graph TD
-    A[Automated Test Suite<br>test_rules.py] --> B1[Alpine ICMP]
-    A --> B2[Nmap SYN Scan]
-    A --> B3[Wget SQLi]
+    A[Automated Test Suite<br>test_rules.py] --> ATK[attacker<br>Alpine + nmap, curl, iputils]
 
-    B1 -->|Traffic to external IP| C[Suricata NIDS Engine<br>rules/local.rules]
-    B2 -->|Traffic to external IP| C
-    B3 -->|Traffic to Docker Desktop VM IP| C
+    ATK -->|ICMP / SYN scan / SQLi<br>over lab_br0| VIC[victim<br>nginx:alpine]
+
+    C[Suricata NIDS Engine<br>network_mode: host<br>-i lab_br0] -.->|sniffs the whole bridge| ATK
+    C -.->|sniffs the whole bridge| VIC
 
     C -->|Ingestion & Filtering| D[logs/fast.log + eve.json<br>Normalized Alert Stream]
+    D --> A
 ```
 
-### Stack Components:
-* **Detection Engine:** Suricata NIDS running as a Docker container, capturing on **both** `eth0` and `lo` (see Root Cause Analysis below for why both are required).
-* **Orchestration:** `docker-compose` mapping volume mounts for rules and logs.
-* **Testing Automation:** Custom Python script (`test_rules.py`) executing controlled `docker run` triggers against network interfaces.
-* **Log Inspection:** PowerShell real-time log monitoring (`Get-Content -Wait`), and `eve.json` for structured, SIEM-ready event data.
+### Stack Components
 
-> **Known architectural limitation:** This lab runs on Docker Desktop for Windows. `network_mode: host` does **not** expose the real Windows host NIC — it exposes the interface of the Docker Desktop Linux/WSL2 VM. Suricata is therefore monitoring traffic on that VM's virtual interface, not native Windows host traffic. This is sufficient for demonstrating detection logic and tuning methodology, but would not reflect a production deployment on bare-metal Linux.
+- **Detection Engine:** Suricata NIDS (`jasonish/suricata:7.0.6`) running as a Docker container in `network_mode: host`, sniffing the lab bridge interface `lab_br0`.
+- **Attacker:** custom Alpine image (`nmap`, `curl`, `iputils`) with only the `NET_RAW` capability — least privilege for crafting raw SYN packets.
+- **Victim:** `nginx:alpine` serving on port 80 — a real HTTP service to attack.
+- **Orchestration:** `docker-compose` with volume mounts for rules and logs, and a **pinned bridge name** (see below).
+- **Testing Automation:** Python script (`test_rules.py`) that reads `eve.json` from inside the Suricata container and verifies each `signature_id`.
+
+### Why Suricata sits on the host namespace
+
+A Docker bridge behaves like a **switch, not a hub**: a normal member only receives traffic addressed to it. If Suricata were a member of `lab_net`, it would never see the attacker↔victim traffic. Running it with `network_mode: host` places it in the host namespace, where it can observe the entire bridge — the whole "cable."
+
+### Reproducible bridge name (`lab_br0`)
+
+By default Docker names the bridge interface after a random network-ID hash (e.g. `br-1fe765209a84`), and that hash **changes every time the network is recreated** (`docker compose down && up`). Since Suricata is told which interface to sniff with `-i`, a random name makes the lab non-reproducible — it breaks on the next `down`/`up` and on any other machine.
+
+The fix pins the interface name at the network level:
+
+```yaml
+networks:
+  lab_net:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: lab_br0
+```
+
+Suricata then always sniffs `-i lab_br0`. Anyone who clones the repo and runs `docker compose up -d` gets an identical, working environment.
+
+> **Known architectural note:** This lab runs on Docker Desktop for Windows. `network_mode: host` exposes the interfaces of the Docker Desktop Linux/WSL2 VM, not the native Windows host NIC. This is sufficient for demonstrating detection logic and tuning methodology, but would not reflect a production deployment on bare-metal Linux.
 
 ---
 
 ## Signature Engineering (`rules/local.rules`)
 
-```snort
-# 1. ICMP Network Discovery Detection
-alert icmp any any -> any any (msg:"[IDS ALERT] ICMP Network Discovery Detected"; itype:8; threshold: type limit, track by_src, count 1, seconds 30; classtype:not-suspicious; sid:1000001; rev:4;)
+Custom signatures live in the local SID range (`>= 1000000`) to avoid collisions with community rulesets, and are mapped to MITRE ATT&CK.
 
-# 2. Nmap SYN Port Scan Detection
-alert tcp any any -> any !2376 (msg:"[IDS ALERT] Nmap SYN Port Scan Detected"; flags:S; threshold: type both, track by_src, count 10, seconds 15; classtype:attempted-recon; metadata:mitre_tactic Reconnaissance, mitre_technique T1046; sid:1000002; rev:9;)
+| SID | Detects | Technique | MITRE |
+|---|---|---|---|
+| 1000001 | ICMP host discovery (ping sweep) | Recon | — |
+| 1000002 | Nmap SYN port scan | Recon | T1046 |
+| 1000003 | SQL injection — UNION-based | Initial Access | T1190 |
+| 1000004 | SQL injection — tautology / auth bypass | Initial Access | T1190 |
+| 1000005 | SQL injection — blind time-based | Initial Access | T1190 |
 
-# 3. SQL Injection Attack Detection (HTTP-anchored, UNION-based)
-alert http any any -> any any (msg:"[IDS ALERT] SQL Injection Attempt Detected - UNION-based"; flow:to_server,established; http.uri; content:"UNION"; nocase; content:"SELECT"; nocase; distance:1; within:20; classtype:web-application-attack; metadata:mitre_tactic Initial-Access, mitre_technique T1190; threshold: type both, track by_src, count 1, seconds 10; sid:1000003; rev:13;)
-```
-### What each option does
+### What the key options do
 
 | Option | Purpose | Essential? |
 |---|---|---|
-| `itype:8` | Isolates outbound ICMP Echo Requests, filtering out Echo Replies | ✅ Core detection logic |
-| `flags:S` | Matches only TCP SYN packets (connection attempts) | ✅ Core detection logic |
-| `alert http` + `http.uri` | Uses Suricata's HTTP parser and anchors content matching to the URI buffer specifically — not the raw TCP payload | ✅ Prevents false positives from unrelated traffic containing the word "UNION" |
-| `content:"UNION"` + `content:"SELECT"` with `distance:1; within:20;` | Requires both SQLi indicators, in order, within a small byte window (accounting for the decoded space between them) | ✅ Prevents single-keyword false positives |
-| `threshold: type both, count N, seconds M` | Requires a minimum volume of events **and** limits output to one alert per window | ✅ Critical — this is what separates "any legitimate connection" from "actual scan/attack behavior" |
-| `classtype`, `metadata` (MITRE ATT&CK), `rev` | Severity classification, threat-intel mapping, version tracking | ⚪ Cosmetic/documentation — does not affect detection logic, but demonstrates SOC-oriented rule design |
+| `itype:8` | Isolates ICMP Echo Requests, filtering out Echo Replies | ✅ Core detection logic |
+| `flow:to_server` + `flags:S,12` | Counts only inbound SYNs; `,12` ignores ECN bits (CWR/ECE) so SYNs from modern stacks are not missed | ✅ Robust SYN-scan detection |
+| `alert http` + `http.uri` | Uses Suricata's HTTP parser and anchors matching to the normalized URI buffer, not the raw TCP payload | ✅ Prevents false positives from the word "UNION" in unrelated traffic |
+| `content:"UNION"` + `content:"SELECT"; distance:0` | Requires both SQLi keywords in order, with **no upper byte bound** | ✅ Catches UNION SQLi regardless of padding (see Finding #1) |
+| `pcre:"/'\s*OR\s+/i"` | Confirms the injection marker (quote + OR) for tautologies, avoiding false positives on legitimate `OR` | ✅ Core detection logic |
+| `pcre:"/(sleep\|benchmark\|pg_sleep\|waitfor\s+delay)\s*\(/i"` | Matches time-delay function *calls* across DB engines | ✅ Core detection logic |
+| `threshold: type both, count N, seconds M` | Requires a minimum event volume **and** caps output to one alert per window | ✅ Separates "legitimate connection" from "scan/attack behavior" |
+| `classtype`, `metadata` (MITRE), `rev` | Severity classification, threat-intel mapping, version tracking | ⚪ Documentation — demonstrates SOC-oriented rule design |
 
 ---
-## Alert Tuning & Noise Reduction Methodology
 
-| Signature ID | Target Event | Iteration 1 (Initial Problem) | Iteration 2 (First Fix Attempt) | Iteration 3 (Final Solution) |
+## Alert Tuning & Iteration Methodology
+
+| Signature | Target Event | Iteration 1 (Initial Problem) | Iteration 2 (First Fix Attempt) | Iteration 3 (Final Solution) |
 |---|---|---|---|---|
-| SID: 1000001 | ICMP Ping | Fired twice per ping (Request + Reply) | `itype:8` isolates the outbound request | ✅ 1 alert per ping sequence |
-| SID: 1000002 | Nmap SYN Scan | `threshold: type limit, count 1` fired on **any** new TCP connection, not just scans | `detection_filter, count 10, seconds 3` required real scan volume, but fired once **per port** scanned (~12 duplicate alerts) — window too short for a full scan | ✅ `threshold: type both, count 10, seconds 15` requires real volume **and** caps output to 1 alert per window |
-| SID: 1000003 | SQL Injection | `content:"UNION"` matched anywhere in the raw payload — high false-positive risk, no HTTP anchoring | Anchored to `http.uri` with `distance:0` — silently never matched, because the decoded URI has a real space character between `UNION` and `SELECT` | ✅ `distance:1; within:20;` correctly accounts for the space, matching the real `UNION SELECT` pattern |
+| SID 1000001 | ICMP Ping | Fired twice per ping (Request + Reply) | `itype:8` isolates the outbound request | ✅ `threshold type limit` → 1 alert per sequence |
+| SID 1000002 | Nmap SYN Scan | `flags:S` only + `!2376` port hack to hide daemon noise | Removed the `!2376` hack once capture scope was correct | ✅ `flow:to_server; flags:S,12; threshold both, count 10, seconds 15` |
+| SID 1000003 | SQL Injection | `distance:1; within:20` — **evadable** by padding bytes between `UNION` and `SELECT` | Tried `within:200`, then a diagnostic `pcre` — neither was the real cause | ✅ `distance:0` (no `within`) + isolating the threshold blind spot (see Findings) |
 
 ---
-## Root Cause Analysis: Why the SQLi Rule Stayed Silent (Loopback vs. Interface Capture)
 
-This was the most valuable debugging session of the project, and worth documenting in detail because the root cause was **not** in the rule syntax.
+## Key Findings
 
-**Symptom:** ICMP and Nmap alerts fired correctly on every run. The SQL Injection alert fired zero times, with no errors anywhere — not in Suricata's logs, not in the rule loading output, not in `eve.json`.
+The most valuable part of the lab was not the rules themselves, but what automated testing **revealed** about them.
+
+### Finding #1 — `within:20` was an evadable filter
+
+The original UNION rule required `SELECT` within 20 bytes of `UNION` (`distance:1; within:20`). An attacker who pads the gap between the two keywords pushes `SELECT` past the 20-byte window and **evades the rule entirely**.
+
+This was proven, not assumed — the same attack, padded, went from detected to undetected:
+
+![SQLi evasion](assets/sqli-evasion.png)
+
+The fix (`distance:0`, no `within`) removes the upper bound. This is the classic Achilles heel of signature-based detection — WAFs suffer the same: a signature catches the exact syntax its author anticipated and is bypassed by variations they didn't. The robust answer is to match the *intent* (the pattern family), not one exact string.
+
+### Finding #2 — The `threshold` creates an exploitable blind spot
+
+While testing the SQLi rules, an "evasive" case kept failing — but only when a "normal" case of the **same SID** ran just before it. The cause was not the rule. The `threshold: type both, count 1, seconds 10` means: after one alert for a SID, further alerts are suppressed for 10 seconds. The second attack was detected but silenced.
+
+**Security implication:** thresholds reduce console noise, but create a **notification blind spot**. A second attack of the same SID inside the window — even using a different evasion technique — generates no alert. An attacker who knows the tuning can hide in that window.
+
+### Finding #3 — …but the forensic record survives
+
+A follow-up check confirmed that even when the **alert** is suppressed, Suricata still writes the corresponding `http` event to `eve.json`. The blind spot affects **real-time notification**, not the forensic record — *provided the analysis process reviews raw events, not just alerts.*
+
+> **Operational takeaway:** threshold tuning is a trade-off between noise and coverage. Keep alerting rate-limited for the analyst, but log everything for hunting/forensics, and correlate raw events upstream (SIEM) so a suppressed alert is not a lost detection.
+
+---
+
+## Root Cause Analysis: The Non-Reproducible Bridge
+
+This was the most valuable debugging session of the project, and worth documenting because the root cause was **not** in the rule syntax.
+
+**Symptom:** After building the lab, Suricata ran fine. But after any `docker compose down && up`, `suricata_ids` entered a restart loop and never came back up.
 
 **Diagnostic path:**
-1. Confirmed `web_target` (nginx) was up and responding to plain HTTP requests — ruled out "nginx is down."
-2. Confirmed the test payload was reaching nginx (`200`/`404` responses came back) — ruled out "the packet never left the container."
-3. Searched `eve.json` for any HTTP event matching the test URL — **found nothing at all**, which ruled out a rule-syntax problem (if Suricata had seen and parsed the HTTP request, it would appear here even without an alert).
-4. This pointed to a capture-scope problem: Suricata was started with `-i eth0` only.
 
-**Actual root cause:** Both the SQLi test traffic (`127.0.0.1`, then later the host's own IP `192.168.65.3`) and the destination were on the **same machine**. Linux delivers same-host traffic through the **loopback interface (`lo`)** at the kernel level — it never traverses `eth0`, regardless of whether the destination is `127.0.0.1` or the machine's own real IP. Since Suricata was only capturing on `eth0`, this traffic was structurally invisible to it — not filtered, not dropped, simply never seen.
+1. Read Suricata's logs: `af-packet: eth0: failed to init socket for interface` and `thread "W#01-eth0" failed to start`. The `-i eth0` from an early config was targeting an interface that either had a WSL2-oversized MTU or wasn't where the lab traffic flowed.
+2. Listed the real interfaces the host sees (`docker run --rm --net=host alpine ip a`) and found the lab traffic on a bridge named `br-1fe765209a84`, confirmed by two `veth` interfaces with `master br-1fe765209a84`.
+3. Pointed Suricata at that bridge — it worked. But after the next `docker compose down && up`, the container broke again.
 
-ICMP and Nmap traffic, by contrast, targeted an external IP (`1.1.1.1`), which genuinely traverses `eth0`, so those rules worked from the start — masking the fact that the capture interface itself was incomplete.
+**Actual root cause:** `docker compose down` destroys the network entirely. Recreating it produces a **new network ID**, and therefore a **new bridge hash**. The old interface name no longer exists, so Suricata sniffs a phantom interface and aborts. The lab only worked on the exact machine, at the exact moment, it was first built.
 
-**Fix:** Suricata needs to capture on both interfaces:
+**Fix:** stop accepting Docker's random name and pin it via `driver_opts`:
+
 ```yaml
-command: -i eth0 -i lo -S /var/lib/suricata/rules/local.rules
+driver_opts:
+  com.docker.network.bridge.name: lab_br0
 ```
-(An initial attempt using `-i any` failed, because Suricata's default `af-packet` capture mode requires real interface names — `any` is not a valid `af-packet` device, unlike tools such as `tcpdump` which handle it as a special pseudo-interface.)
 
-**Takeaway:** A NIDS lab's detection logic can be perfectly correct and still silently miss traffic if the capture scope doesn't match where the traffic actually flows. This is a common and easy-to-miss issue specifically in single-host lab environments, where "attacker" and "victim" containers share the same network namespace.
+Suricata sniffs `-i lab_br0` permanently. Verified by destroying and recreating the network twice while Suricata stayed `Up`.
+
+**Takeaway:** A NIDS lab's detection logic can be perfectly correct and still break on any machine other than the author's if the infrastructure isn't deterministic. Reproducibility is part of the deliverable.
 
 ---
 
 ## Validation & Evidence
 
-### 1. Automated Execution Suite
- 
-```bash
+### 1. Automated Verification Suite
+
+Unlike a script that only launches attacks, `test_rules.py` **verifies detection**: it records the byte offset of `eve.json`, fires the attack, reads only the new events, and asserts the expected `signature_id` appeared. It includes a **negative case** (benign HTTP must not alert) and restarts Suricata per case to clear threshold state for deterministic results.
+
+```
 python test_rules.py
 ```
- 
-> **Note:** the SQL Injection test targets the Docker Desktop VM's `eth0` IP directly.
- 
-### 2. High-Fidelity Alert Telemetry
- 
-Final `fast.log` output — one alert per attack vector, no duplicate noise:
- 
-```
-08/02/2026-19:15:02.113182  [**] [1:1000001:4] [IDS ALERT] ICMP Network Discovery Detected [**] [Classification: Not Suspicious Traffic] [Priority: 3] {ICMP} 192.168.65.3:8 -> 1.1.1.1:0
-08/02/2026-19:15:07.305996  [**] [1:1000002:9] [IDS ALERT] Nmap SYN Port Scan Detected [**] [Classification: Attempted Information Leak] [Priority: 2] {TCP} 192.168.65.3:64293 -> 1.1.1.1:65
-08/02/2026-19:15:16.069929  [**] [1:1000003:13] [IDS ALERT] SQL Injection Attempt Detected - UNION-based [**] [Classification: Web Application Attack] [Priority: 1] {TCP} 192.168.65.3:41106 -> 192.168.65.3:80
-```
- 
+
+![Test suite passing](assets/test-suite-passing.png)
+
+### 2. The Suite Fails When It Should Fail
+
+A test that always passes is worthless. These controls — a wrong SID, a stopped sensor — confirm the suite actually detects failures:
+
+![Negative controls](assets/test-negative-controls.png)
+
+### 3. High-Fidelity Alert Telemetry
+
+Structured `eve.json` event confirming the sniff interface (`in_iface: lab_br0`), the source/destination, and the matched `signature_id` — one clean, SIEM-ready event per attack:
+
+![Infrastructure and telemetry](assets/infrastructure.png)
+
 ---
- 
+
 ## Repository Structure
- 
+
 ```
 suricata-ids-rule-tuning/
-├── docker-compose.yml      # Suricata + web_target container orchestration
+├── docker-compose.yml      # 3 services + pinned bridge (lab_br0)
+├── attacker/
+│   └── Dockerfile          # Alpine + nmap, curl, iputils
 ├── rules/
-│   └── local.rules         # Custom tuned Suricata signatures (rev 4/9/13)
-├── logs/
-│   └── fast.log             # NIDS alert log output (gitignored)
-├── test_rules.py             # Automated attack simulation script
-└── README.md                # Project documentation
+│   └── local.rules         # 5 tuned custom signatures
+├── logs/                   # NIDS output (eve.json, fast.log) - gitignored
+├── test_rules.py           # Automated verification suite
+└── README.md               # Project documentation
 ```
- 
+
 ---
+
 ## Key Technical Takeaways
 
-- **Threshold engineering:** Understood the practical difference between `threshold: type limit`, `detection_filter`, and `threshold: type both` — and why only the last one correctly combines "require real attack volume" with "suppress duplicate noise."
-- **HTTP-layer anchoring:** Moved from raw TCP payload matching to `http.uri`-anchored, multi-token detection to eliminate false positives in the SQLi signature.
-- **Capture-scope debugging:** Diagnosed a silent detection failure down to the network-interface layer (loopback vs. `eth0`), rather than assuming the problem was rule syntax.
-- **SOC Efficiency:** Demonstrated how proper thresholding directly improves SIEM ingestion costs and analyst response speed.
-- **Threat Intelligence Mapping:** Tagged custom signatures with MITRE ATT&CK techniques (T1046, T1190) for SOC-standard triage.
+- **Threshold engineering:** Understood the practical difference between `threshold: type limit`, `detection_filter`, and `threshold: type both` — and discovered first-hand the notification blind spot that thresholds create.
+- **Signature evasion:** Proved empirically that a `within:` byte-window is evadable by padding, and hardened the rule to match the pattern family instead.
+- **Verification over execution:** Built a test suite that reads `eve.json` by byte offset from inside the container, with positive and negative cases, rather than trusting that "the attack ran."
+- **Infrastructure reproducibility:** Diagnosed a non-deterministic bridge name down to Docker's network-ID hashing and pinned it, making the lab reproducible for anyone who clones it.
+- **Threat Intelligence Mapping:** Tagged signatures with MITRE ATT&CK techniques (T1046, T1190) for SOC-standard triage.
 
 ## Known Limitations
 
-- Detection of "many SYNs from one source" does not distinguish a single-port repeated connection attempt from a genuine multi-port scan; true multi-port scan correlation would require aggregating `eve.json` events by `src_ip` + unique `dest_port` count in a SIEM, rather than relying on the Suricata rule alone.
-- The lab runs on Docker Desktop for Windows, which means Suricata observes the Docker Desktop VM's virtual interfaces, not native Windows host traffic.
-- `test_rules.py` currently hardcodes the target IP; it should ideally resolve it dynamically via `docker exec suricata_ids ip addr show eth0`.
+- The tautology rule (1000004) requires a quote marker, so quote-less tautologies in numeric fields are not caught. The blind time-based rule (1000005) is signature-based, so obfuscated delay primitives (nested queries, heavy joins) slip through.
+- No error-based or out-of-band SQLi coverage; out-of-band detection would require monitoring outbound DNS from the victim.
+- The suite's malformed-JSON handling counts and reports dropped lines, but silent line-dropping is itself a log-evasion vector a production pipeline should alert on.
+- The SYN rule handles ECN via `flags:S,12`, but the suite does not generate ECN traffic to prove that path.
+- The lab runs on Docker Desktop for Windows, so Suricata observes the WSL2 VM's virtual interfaces, not native Windows host traffic.
+
+## Future Work
+
+- A post-processing layer that reviews the raw `http`/`flow` events the rules didn't alert on, to close the threshold blind spot — with a latency chosen by risk. An LLM could correlate these events, treating the logs as attacker-controlled input and verifying conclusions against the raw event.
+- Migrate threshold tuning toward a cumulative scoring model instead of binary match/no-match rules.
+- Add error-based and out-of-band SQLi coverage.
 
 ## License & Legal Disclaimer
 
 ### License
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details. You are free to use, modify, and distribute this material for educational and defensive security purposes.
+
+This project is licensed under the MIT License - see the [LICENSE](https://github.com/JhonnyValdivieso/suricata-ids-rule-tuning/blob/main/LICENSE) file for details. You are free to use, modify, and distribute this material for educational and defensive security purposes.
 
 ### Legal & Educational Disclaimer
+
 > **Notice:** This tool is designed for authorized network auditing and security hardening assessment purposes only. Ensure you have explicit authorization before running audit operations against active enterprise infrastructure.
 
+## Authors
+
+This project was designed and built jointly by:
+
+- **Jhonny Valdivieso** — [@JhonnyValdivieso](https://github.com/JhonnyValdivieso)
+- **Ricardo** — [@Ricardopirlo](https://github.com/Ricardopirlo)
+
+<!--
+If you want to credit who did what, add a short breakdown here, e.g.:
+- Jhonny: infrastructure, network diagnostics, test-suite design
+- Ricardo: rule authoring, SQLi vectors, documentation
+Both authors reviewed and validated the final rules and findings.
+-->
