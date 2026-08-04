@@ -196,14 +196,18 @@ Structured `eve.json` event confirming the sniff interface (`in_iface: lab_br0`)
 
 ```
 suricata-ids-rule-tuning/
-├── docker-compose.yml      # 3 services + pinned bridge (lab_br0)
-├── attacker/
-│   └── Dockerfile          # Alpine + nmap, curl, iputils
-├── rules/
-│   └── local.rules         # 5 tuned custom signatures
-├── logs/                   # NIDS output (eve.json, fast.log) - gitignored
-├── test_rules.py           # Automated verification suite
-└── README.md               # Project documentation
+├── assets/                  # Capturas de pantalla y diagramas de arquitectura
+├── attacker/                # Entorno del atacante (Alpine + nmap, curl, iputils)
+│   └── Dockerfile
+├── config/                  # Configuración del motor NIDS
+│   └── suricata.yml
+├── logs/                    # Salida de logs del NIDS (eve.json, fast.log) [Gitignored]
+├── rules/                   # Firma de detección customizadas
+│   └── local.rules
+├── .gitignore               # Exclusión de archivos temporales y logs
+├── docker-compose.yml       # Orquestación de servicios y red bridge fija (lab_br0)
+├── README.md                # Documentación principal del proyecto
+└── test_rules.py            # Suite de pruebas de verificación automatizada
 ```
 
 ---
