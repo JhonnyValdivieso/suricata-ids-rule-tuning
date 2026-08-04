@@ -1,0 +1,36 @@
+services:
+  suricata:
+    image: jasonish/suricata:7.0.6
+    container_name: suricata_ids
+    network_mode: "host"
+    cap_add:
+      - NET_ADMIN
+      - SYS_NICE
+      - NET_RAW
+    command: -i lab_br0 -S /var/lib/suricata/rules/local.rules
+    volumes:
+      - ./rules:/var/lib/suricata/rules
+      - ./logs:/var/log/suricata
+    restart: unless-stopped
+
+  victim:
+    image: nginx:alpine
+    container_name: victim
+    networks:
+      - lab_net
+    restart: unless-stopped
+
+  attacker:
+    build: ./attacker
+    container_name: attacker
+    networks:
+      - lab_net
+    cap_add:
+      - NET_RAW
+    restart: "no"
+
+networks:
+  lab_net:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: lab_br0

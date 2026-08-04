@@ -1,0 +1,126 @@
+# =============================================================================
+# Suricata local rules - IDS rule tuning lab
+# -----------------------------------------------------------------------------
+# Custom signatures live in the local SID range (>= 1000000) so they never
+# collide with the community/ET rulesets.
+#
+#   1000001  ICMP host discovery
+#   1000002  Nmap SYN port scan
+#   1000003  SQL injection - UNION-based
+#   1000004  SQL injection - tautology / auth bypass
+#   1000005  SQL injection - blind time-based
+#
+# Every alert message is prefixed with [IDS ALERT] so lab alerts are easy to
+# grep out of eve.json / fast.log. Bump `rev:` whenever a rule is edited.
+# =============================================================================
+
+
+# 1. ICMP Network Discovery
+# Fires on ICMP echo requests (ping / ping sweep). `threshold type limit`
+# collapses a burst of pings into a single alert per source every 30s, so a
+# host-discovery sweep does not flood the console with identical alerts.
+alert icmp any any -> any any (msg:"[IDS ALERT] ICMP Network Discovery"; itype:8; threshold: type limit, track by_src, count 1, seconds 30; classtype:not-suspicious; sid:1000001; rev:5;)
+
+
+# 2. Nmap SYN Port Scan
+# Detects half-open (SYN) scans: many SYNs to a server in a short window.
+#   flow:to_server  -> count only SYNs heading TO the target, not replies.
+#   flags:S,12      -> match SYN while IGNORING the ECN bits (CWR/ECE), so
+#                      modern stacks that negotiate ECN are not missed.
+#   threshold both  -> require >= 10 SYNs in 15s AND emit a single alert.
+# Known limitation: slow scans that stay under 10 SYNs / 15s will not trip it.
+alert tcp any any -> any any (msg:"[IDS ALERT] Nmap SYN Port Scan"; flow:to_server; flags:S,12; threshold: type both, track by_src, count 10, seconds 15; classtype:attempted-recon; metadata:mitre_tactic Reconnaissance, mitre_technique T1046; sid:1000002; rev:11;)
+
+
+# 3. SQL Injection - UNION-based
+# Detects `UNION ... SELECT` in the request URI (data-extraction SQLi).
+#   distance:0 with NO `within` -> SELECT may appear ANY distance after UNION.
+# This is the fix validated in the lab: an earlier `within:20` was evadable by
+# padding bytes between UNION and SELECT; distance:0 closes that gap.
+# Known limitation: matches the normalized http.uri buffer only (not body/POST).
+alert http any any -> any any (msg:"[IDS ALERT] SQLi UNION-based"; flow:to_server,established; http.uri; content:"UNION"; nocase; content:"SELECT"; nocase; distance:0; classtype:web-application-attack; metadata:mitre_tactic Initial-Access, mitre_technique T1190; threshold: type both, track by_src, count 1, seconds 10; sid:1000003; rev:17;)
+
+
+# 4. SQL Injection - Tautology / Auth Bypass
+# Detects the INJECTION MARKER (a quote that breaks out of the string, followed
+# by OR), e.g.  admin' OR '1'='1 . We match the marker rather than the
+# tautology itself, because a bare `OR x=x` is indistinguishable from a
+# legitimate SQL `OR` and would cause false positives.
+#   content:"'" + content:"OR" act as a fast pre-filter; the pcre confirms the
+#   exact  '<spaces>OR<space>  shape and prevents matching inside ORDER/WORD.
+# Known limitation: does NOT catch quote-less tautologies, and depends on
+# Suricata normalizing %27 back to a quote in the http.uri buffer.
+alert http any any -> any any (msg:"[IDS ALERT] SQLi Tautology / Auth Bypass"; flow:to_server,established; http.uri; content:"'"; content:"OR"; nocase; distance:0; pcre:"/'\s*OR\s+/i"; classtype:web-application-attack; metadata:mitre_tactic Initial-Access, mitre_technique T1190; sid:1000004; rev:2;)
+
+
+# 5. SQL Injection - Blind Time-based
+# Detects time-delay functions used for blind SQLi, across DB engines:
+#   sleep|benchmark (MySQL), pg_sleep (PostgreSQL), waitfor delay (SQL Server).
+#   \s*\(  -> require an opening paren, so we match a function CALL, not the
+#            word "sleep" appearing in normal text.
+# Known limitation: signature-based, so novel/obfuscated delay primitives
+# (nested queries, heavy joins) will not be caught.
+alert http any any -> any any (msg:"[IDS ALERT] SQLi Blind Time-based"; flow:to_server,established; http.uri; pcre:"/(sleep|benchmark|pg_sleep|waitfor\s+delay)\s*\(/i"; classtype:web-application-attack; metadata:mitre_tactic Initial-Access, mitre_technique T1190; threshold: type both, track by_src, count 1, seconds 10; sid:1000005; rev:2;)
+# =============================================================================
+# Suricata local rules - IDS rule tuning lab
+# -----------------------------------------------------------------------------
+# Custom signatures live in the local SID range (>= 1000000) so they never
+# collide with the community/ET rulesets.
+#
+#   1000001  ICMP host discovery
+#   1000002  Nmap SYN port scan
+#   1000003  SQL injection - UNION-based
+#   1000004  SQL injection - tautology / auth bypass
+#   1000005  SQL injection - blind time-based
+#
+# Every alert message is prefixed with [IDS ALERT] so lab alerts are easy to
+# grep out of eve.json / fast.log. Bump `rev:` whenever a rule is edited.
+# =============================================================================
+
+
+# 1. ICMP Network Discovery
+# Fires on ICMP echo requests (ping / ping sweep). `threshold type limit`
+# collapses a burst of pings into a single alert per source every 30s, so a
+# host-discovery sweep does not flood the console with identical alerts.
+alert icmp any any -> any any (msg:"[IDS ALERT] ICMP Network Discovery"; itype:8; threshold: type limit, track by_src, count 1, seconds 30; classtype:not-suspicious; sid:1000001; rev:5;)
+
+
+# 2. Nmap SYN Port Scan
+# Detects half-open (SYN) scans: many SYNs to a server in a short window.
+#   flow:to_server  -> count only SYNs heading TO the target, not replies.
+#   flags:S,12      -> match SYN while IGNORING the ECN bits (CWR/ECE), so
+#                      modern stacks that negotiate ECN are not missed.
+#   threshold both  -> require >= 10 SYNs in 15s AND emit a single alert.
+# Known limitation: slow scans that stay under 10 SYNs / 15s will not trip it.
+alert tcp any any -> any any (msg:"[IDS ALERT] Nmap SYN Port Scan"; flow:to_server; flags:S,12; threshold: type both, track by_src, count 10, seconds 15; classtype:attempted-recon; metadata:mitre_tactic Reconnaissance, mitre_technique T1046; sid:1000002; rev:11;)
+
+
+# 3. SQL Injection - UNION-based
+# Detects `UNION ... SELECT` in the request URI (data-extraction SQLi).
+#   distance:0 with NO `within` -> SELECT may appear ANY distance after UNION.
+# This is the fix validated in the lab: an earlier `within:20` was evadable by
+# padding bytes between UNION and SELECT; distance:0 closes that gap.
+# Known limitation: matches the normalized http.uri buffer only (not body/POST).
+alert http any any -> any any (msg:"[IDS ALERT] SQLi UNION-based"; flow:to_server,established; http.uri; content:"UNION"; nocase; content:"SELECT"; nocase; distance:0; classtype:web-application-attack; metadata:mitre_tactic Initial-Access, mitre_technique T1190; threshold: type both, track by_src, count 1, seconds 10; sid:1000003; rev:17;)
+
+
+# 4. SQL Injection - Tautology / Auth Bypass
+# Detects the INJECTION MARKER (a quote that breaks out of the string, followed
+# by OR), e.g.  admin' OR '1'='1 . We match the marker rather than the
+# tautology itself, because a bare `OR x=x` is indistinguishable from a
+# legitimate SQL `OR` and would cause false positives.
+#   content:"'" + content:"OR" act as a fast pre-filter; the pcre confirms the
+#   exact  '<spaces>OR<space>  shape and prevents matching inside ORDER/WORD.
+# Known limitation: does NOT catch quote-less tautologies, and depends on
+# Suricata normalizing %27 back to a quote in the http.uri buffer.
+alert http any any -> any any (msg:"[IDS ALERT] SQLi Tautology / Auth Bypass"; flow:to_server,established; http.uri; content:"'"; content:"OR"; nocase; distance:0; pcre:"/'\s*OR\s+/i"; classtype:web-application-attack; metadata:mitre_tactic Initial-Access, mitre_technique T1190; sid:1000004; rev:2;)
+
+
+# 5. SQL Injection - Blind Time-based
+# Detects time-delay functions used for blind SQLi, across DB engines:
+#   sleep|benchmark (MySQL), pg_sleep (PostgreSQL), waitfor delay (SQL Server).
+#   \s*\(  -> require an opening paren, so we match a function CALL, not the
+#            word "sleep" appearing in normal text.
+# Known limitation: signature-based, so novel/obfuscated delay primitives
+# (nested queries, heavy joins) will not be caught.
+alert http any any -> any any (msg:"[IDS ALERT] SQLi Blind Time-based"; flow:to_server,established; http.uri; pcre:"/(sleep|benchmark|pg_sleep|waitfor\s+delay)\s*\(/i"; classtype:web-application-attack; metadata:mitre_tactic Initial-Access, mitre_technique T1190; threshold: type both, track by_src, count 1, seconds 10; sid:1000005; rev:2;)
