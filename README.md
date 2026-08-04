@@ -21,7 +21,7 @@ Beyond building the rules, the lab produced three documented **detection finding
 
 <!-- INFOGRAPHIC PLACEHOLDER -->
 <!-- Add your notebook summary infographic here, e.g.: -->
-![IDS Tuning Process](assets/IDS_Tuning_Process.png)
+![IDS Tuning Process](assets/Network_Security_Tool_Validation_Lab.png)
 
 ---
 
