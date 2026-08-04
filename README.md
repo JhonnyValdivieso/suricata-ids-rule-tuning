@@ -238,7 +238,7 @@ This project is licensed under the MIT License - see the [LICENSE](https://githu
 
 ### Legal & Educational Disclaimer
 
-> **Notice:** This tool is designed for authorized network auditing and security hardening assessment purposes only. Ensure you have explicit authorization before running audit operations against active enterprise infrastructure.
+> **Notice:** this tool is designed exclusively for authorized network auditing and security hardening assessment. Ensure you have explicit authorization before running audit operations against active enterprise infrastructure. All tests in this lab run against a self-owned, isolated container (victim), never against third-party infrastructure.
 
 ## Authors
 
@@ -247,9 +247,3 @@ This project was designed and built jointly by:
 - **Jhonny Valdivieso** — [@JhonnyValdivieso](https://github.com/JhonnyValdivieso)
 - **Ricardo** — [@Ricardopirlo](https://github.com/Ricardopirlo)
 
-<!--
-If you want to credit who did what, add a short breakdown here, e.g.:
-- Jhonny: infrastructure, network diagnostics, test-suite design
-- Ricardo: rule authoring, SQLi vectors, documentation
-Both authors reviewed and validated the final rules and findings.
--->
