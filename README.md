@@ -112,12 +112,6 @@ The original UNION rule required `SELECT` within 20 bytes of `UNION` (`distance:
 
 This was proven, not assumed: the automated suite runs both variants of the same attack — normal spacing and >20 bytes of padding — as separate cases against the same SID. Under the old rule the padded case failed while the normal one passed; under the fixed rule both pass (see `SQLi UNION-SELECT (evasive)` in the suite output below).
 
-<!-- TODO: replace the sentence above with the side-by-side capture:
-     assets/sqli-evasion.png — old rule (within:20) FAILing the padded case
-     next to the fixed rule PASSing it. Until that image exists, do not claim
-     a screenshot that is not here. -->
-
-
 The fix (`distance:0`, no `within`) removes the upper bound. This is the classic Achilles heel of signature-based detection — WAFs suffer the same: a signature catches the exact syntax its author anticipated and is bypassed by variations they didn't. The robust answer is to match the *intent* (the pattern family), not one exact string.
 
 ### Finding #2 — The `threshold` creates an exploitable blind spot
@@ -176,11 +170,6 @@ python test_rules.py        # exits 0 only if every case passed
 ### 2. The Suite Fails When It Should Fail
 
 A test that always passes is worthless. The suite therefore reports **three** outcomes, not two: `PASS`, `FAIL`, and `ERROR` — the last one meaning "I could not verify this". A stopped sensor, an attack command that never executed, or a truncated log all produce `ERROR`, never a green tick, and the process exits non-zero unless every case genuinely passed.
-
-<!-- TODO: add assets/test-negative-controls.png showing the suite reacting to
-     (a) an intentionally wrong expected SID -> FAIL, and
-     (b) a stopped Suricata container -> ERROR.
-     The current file is an early single-case run and does not show either. -->
 
 
 ### 3. High-Fidelity Alert Telemetry
@@ -258,4 +247,4 @@ This project is licensed under the MIT License - see the [LICENSE](https://githu
 This project was designed and built jointly by:
 
 - **Jhonny Valdivieso** — [@JhonnyValdivieso](https://github.com/JhonnyValdivieso)
-- **Ricardo** — [@RicardoVargas](https://github.com/Ricardopirlo)
+- **Ricardo Vargas** — [@RicardoVargas](https://github.com/Ricardopirlo)
