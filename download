@@ -1,0 +1,5 @@
+# Normalise line endings: developed on Windows, consumed inside Linux containers.
+# Without this, Suricata rules and shell scripts can reach the container with CRLF.
+* text=auto eol=lf
+
+*.png binary
