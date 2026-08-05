@@ -110,7 +110,9 @@ The most valuable part of the lab was not the rules themselves, but what automat
 
 The original UNION rule required `SELECT` within 20 bytes of `UNION` (`distance:1; within:20`). An attacker who pads the gap between the two keywords pushes `SELECT` past the 20-byte window and **evades the rule entirely**.
 
-This was proven, not assumed: the automated suite runs both variants of the same attack — normal spacing and >20 bytes of padding — as separate cases against the same SID. Under the old rule the padded case failed while the normal one passed; under the fixed rule both pass (see `SQLi UNION-SELECT (evasive)` in the suite output below).
+This was proven, not assumed. The suite runs both variants of the same attack — normal spacing and >20 bytes of padding — as separate cases against the same SID. Under the old rule the padded case failed while the normal one passed; changing only the rule (not the attack) makes the padded case pass:
+
+![SQLi within:20 evasion](assets/sqli-evasion.png)
 
 The fix (`distance:0`, no `within`) removes the upper bound. This is the classic Achilles heel of signature-based detection — WAFs suffer the same: a signature catches the exact syntax its author anticipated and is bypassed by variations they didn't. The robust answer is to match the *intent* (the pattern family), not one exact string.
 
@@ -169,7 +171,9 @@ python test_rules.py        # exits 0 only if every case passed
 
 ### 2. The Suite Fails When It Should Fail
 
-A test that always passes is worthless. The suite therefore reports **three** outcomes, not two: `PASS`, `FAIL`, and `ERROR` — the last one meaning "I could not verify this". A stopped sensor, an attack command that never executed, or a truncated log all produce `ERROR`, never a green tick, and the process exits non-zero unless every case genuinely passed.
+A test that always passes is worthless. These controls confirm the suite detects failures — a wrong expected SID, and a stopped sensor — rather than silently reporting green:
+
+![Negative controls](assets/test-negative-controls.png)
 
 
 ### 3. High-Fidelity Alert Telemetry
