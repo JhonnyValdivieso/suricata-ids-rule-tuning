@@ -1,10 +1,8 @@
 # ------------------------------------------------------------------------------
 # 1. Logs de Telemetría y Muestras de Suricata (No deben ir a GitHub)
 # ------------------------------------------------------------------------------
-logs/
-*.log
-*.json
-!assets/*.png
+logs/*
+!logs/.gitkeep
 
 # ------------------------------------------------------------------------------
 # 2. Entorno y Temporales de Python (para test_rules.py)
