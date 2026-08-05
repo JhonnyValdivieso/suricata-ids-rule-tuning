@@ -191,9 +191,11 @@ suricata-ids-rule-tuning/
 ├── assets/
 │   ├── architecture.png
 │   ├── IDS_Tuning_Process.png
+│   ├── infrastructure.png
 │   ├── rules-iteration-2.png
-│   ├── test-suite-passing.png
-│   └── infrastructure.png
+│   ├── sqli-evasion.png
+│   ├── test-negative-controls.png
+│   └── test-suite-passing.png
 ├── attacker/
 │   └── Dockerfile
 ├── rules/
