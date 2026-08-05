@@ -21,7 +21,7 @@ Beyond building the rules, the lab produced three documented **detection finding
 
 <!-- INFOGRAPHIC PLACEHOLDER -->
 <!-- Add your notebook summary infographic here, e.g.: -->
-![IDS Tuning Process](assets/Network_Security_Tool_Validation_Lab.png)
+![IDS Tuning Process](assets/IDS_Tuning_Process.png)
 
 ---
 
@@ -186,22 +186,22 @@ Structured `eve.json` event confirming the sniff interface (`in_iface: lab_br0`)
 ```
 suricata-ids-rule-tuning/
 ├── assets/
-│   ├── architecture.png            # Lab architecture diagram
-│   ├── IDS_Tuning_Process.png      # Tuning process infographic
-│   ├── test-suite-passing.png      # 7/7 verification run
-│   ├── test-negative-controls.png  # Proof the suite detects failures
-│   ├── sqli-evasion.png            # within:20 evasion (before/after)
-│   └── infrastructure.png          # lab_br0 + eve.json telemetry
+│   ├── architecture.png
+│   ├── IDS_Tuning_Process.png
+│   ├── test-suite-passing.png
+│   ├── test-negative-controls.png
+│   ├── sqli-evasion.png
+│   └── infrastructure.png
 ├── attacker/
-│   └── Dockerfile                  # Alpine + nmap, curl, iputils
+│   └── Dockerfile
 ├── rules/
-│   └── local.rules                 # 5 tuned custom signatures
+│   └── local.rules
 ├── logs/
-│   └── .gitkeep                    # Keeps the (gitignored) log dir in the repo
+│   └── .gitkeep
 ├── .gitignore
 ├── LICENSE
-├── docker-compose.yml              # 3 services + pinned bridge (lab_br0)
-├── test_rules.py                   # Automated verification suite
+├── docker-compose.yml
+├── test_rules.py
 └── README.md
 ```
 
