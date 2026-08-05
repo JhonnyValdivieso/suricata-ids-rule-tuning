@@ -1,17 +1,28 @@
 services:
+  # Detection engine. Runs in the HOST namespace so it can see the whole
+  # lab bridge (a Docker bridge is a switch, not a hub: a member container
+  # would only receive traffic addressed to it).
   suricata:
     image: jasonish/suricata:7.0.6
     container_name: suricata_ids
     network_mode: "host"
     cap_add:
-      - NET_ADMIN
-      - SYS_NICE
-      - NET_RAW
+      - NET_ADMIN   # required to put lab_br0 into promiscuous mode
+      - SYS_NICE    # thread priority for the capture threads
+      - NET_RAW     # raw packet capture
     command: -i lab_br0 -S /var/lib/suricata/rules/local.rules
     volumes:
       - ./rules:/var/lib/suricata/rules
       - ./logs:/var/log/suricata
-    restart: unless-stopped
+    # Deliberately NOT `unless-stopped`: if a bad rule kills the engine we want
+    # the container to stay down and be obvious, instead of restart-looping
+    # while the test suite reads the silence as "the rule did not match".
+    restart: "no"
+    # The bridge only comes up once an endpoint is attached to it, so start the
+    # sensor after the containers that create those endpoints.
+    depends_on:
+      - victim
+      - attacker
 
   victim:
     image: nginx:alpine
@@ -26,11 +37,14 @@ services:
     networks:
       - lab_net
     cap_add:
-      - NET_RAW
+      - NET_RAW   # least privilege: only what nmap needs to craft SYN packets
     restart: "no"
 
 networks:
   lab_net:
     driver: bridge
     driver_opts:
+      # Pin the bridge interface name. Without this Docker derives it from the
+      # network ID hash (br-1fe765209a84), which changes on every recreation
+      # and breaks Suricata's `-i` flag. See the README's Root Cause Analysis.
       com.docker.network.bridge.name: lab_br0
