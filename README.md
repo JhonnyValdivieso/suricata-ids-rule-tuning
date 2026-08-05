@@ -29,18 +29,7 @@ Beyond building the rules, the lab produced three documented **detection finding
 
 The laboratory operates within a lightweight Docker-isolated environment on top of Docker Desktop (Windows/WSL2 backend). Three containers share one **isolated bridge network** (`lab_net`):
 
-```
-graph TD
-    A[Automated Test Suite<br>test_rules.py] --> ATK[attacker<br>Alpine + nmap, curl, iputils]
-
-    ATK -->|ICMP / SYN scan / SQLi<br>over lab_br0| VIC[victim<br>nginx:alpine]
-
-    C[Suricata NIDS Engine<br>network_mode: host<br>-i lab_br0] -.->|sniffs the whole bridge| ATK
-    C -.->|sniffs the whole bridge| VIC
-
-    C -->|Ingestion & Filtering| D[logs/fast.log + eve.json<br>Normalized Alert Stream]
-    D --> A
-```
+![Architecture](assets/architecture.png)
 
 ### Stack Components
 
