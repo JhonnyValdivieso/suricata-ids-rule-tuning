@@ -258,4 +258,4 @@ This project is licensed under the MIT License - see the [LICENSE](https://githu
 This project was designed and built jointly by:
 
 - **Jhonny Valdivieso** — [@JhonnyValdivieso](https://github.com/JhonnyValdivieso)
-- **Ricardo** — [@Ricardopirlo](https://github.com/Ricardopirlo)
+- **Ricardo** — [@RicardoVargas](https://github.com/Ricardopirlo)
