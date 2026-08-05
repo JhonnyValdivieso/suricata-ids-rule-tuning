@@ -19,15 +19,13 @@ Beyond building the rules, the lab produced three documented **detection finding
 
 ## Project Overview: From Alert Fatigue to Precision Tuning
 
-<!-- INFOGRAPHIC PLACEHOLDER -->
-<!-- Add your notebook summary infographic here, e.g.: -->
 ![IDS Tuning Process](assets/IDS_Tuning_Process.png)
 
 ---
 
 ## Architecture & Component Overview
 
-The laboratory operates within a lightweight Docker-isolated environment on top of Docker Desktop (Windows/WSL2 backend). Three containers share one **isolated bridge network** (`lab_net`):
+The laboratory operates within a lightweight Docker-isolated environment on top of Docker Desktop (Windows/WSL2 backend). Three containers make up the lab: attacker and victim sit on one **isolated bridge network** (`lab_net`), while Suricata observes that bridge from the host namespace (see below):
 
 ![Architecture](assets/architecture.png)
 
@@ -98,6 +96,10 @@ Custom signatures live in the local SID range (`>= 1000000`) to avoid collisions
 | SID 1000002 | Nmap SYN Scan | `flags:S` only + `!2376` port hack to hide daemon noise | Removed the `!2376` hack once capture scope was correct | ✅ `flow:to_server; flags:S,12; threshold both, count 10, seconds 15` |
 | SID 1000003 | SQL Injection | `distance:1; within:20` — **evadable** by padding bytes between `UNION` and `SELECT` | Tried `within:200`, then a diagnostic `pcre` — neither was the real cause | ✅ `distance:0` (no `within`) + isolating the threshold blind spot (see Findings) |
 
+The ruleset captured mid-way through that process — three signatures, `!2376` still present, `within:200` still in place — shows what "Iteration 2" actually looked like on disk before the final tuning:
+
+![Ruleset at iteration 2](assets/rules-iteration-2.png)
+
 ---
 
 ## Key Findings
@@ -108,9 +110,13 @@ The most valuable part of the lab was not the rules themselves, but what automat
 
 The original UNION rule required `SELECT` within 20 bytes of `UNION` (`distance:1; within:20`). An attacker who pads the gap between the two keywords pushes `SELECT` past the 20-byte window and **evades the rule entirely**.
 
-This was proven, not assumed — the same attack, padded, went from detected to undetected:
+This was proven, not assumed: the automated suite runs both variants of the same attack — normal spacing and >20 bytes of padding — as separate cases against the same SID. Under the old rule the padded case failed while the normal one passed; under the fixed rule both pass (see `SQLi UNION-SELECT (evasive)` in the suite output below).
 
-![SQLi evasion](assets/sqli-evasion.png)
+<!-- TODO: replace the sentence above with the side-by-side capture:
+     assets/sqli-evasion.png — old rule (within:20) FAILing the padded case
+     next to the fixed rule PASSing it. Until that image exists, do not claim
+     a screenshot that is not here. -->
+
 
 The fix (`distance:0`, no `within`) removes the upper bound. This is the classic Achilles heel of signature-based detection — WAFs suffer the same: a signature catches the exact syntax its author anticipated and is bypassed by variations they didn't. The robust answer is to match the *intent* (the pattern family), not one exact string.
 
@@ -159,19 +165,23 @@ Suricata sniffs `-i lab_br0` permanently. Verified by destroying and recreating 
 
 ### 1. Automated Verification Suite
 
-Unlike a script that only launches attacks, `test_rules.py` **verifies detection**: it records the byte offset of `eve.json`, fires the attack, reads only the new events, and asserts the expected `signature_id` appeared. It includes a **negative case** (benign HTTP must not alert) and restarts Suricata per case to clear threshold state for deterministic results.
+Unlike a script that only launches attacks, `test_rules.py` **verifies detection**: it records the byte offset of `eve.json`, fires the attack, reads only the new events, and asserts the expected `signature_id` appeared. It includes a **negative case** (benign HTTP must not alert), and before every case it restarts Suricata and waits for the engine to report it is capturing — which both clears threshold state and aborts the run if any rule failed to load.
 
 ```
-python test_rules.py
+python test_rules.py        # exits 0 only if every case passed
 ```
 
 ![Test suite passing](assets/test-suite-passing.png)
 
 ### 2. The Suite Fails When It Should Fail
 
-A test that always passes is worthless. These controls — a wrong SID, a stopped sensor — confirm the suite actually detects failures:
+A test that always passes is worthless. The suite therefore reports **three** outcomes, not two: `PASS`, `FAIL`, and `ERROR` — the last one meaning "I could not verify this". A stopped sensor, an attack command that never executed, or a truncated log all produce `ERROR`, never a green tick, and the process exits non-zero unless every case genuinely passed.
 
-![Negative controls](assets/test-negative-controls.png)
+<!-- TODO: add assets/test-negative-controls.png showing the suite reacting to
+     (a) an intentionally wrong expected SID -> FAIL, and
+     (b) a stopped Suricata container -> ERROR.
+     The current file is an early single-case run and does not show either. -->
+
 
 ### 3. High-Fidelity Alert Telemetry
 
@@ -188,9 +198,8 @@ suricata-ids-rule-tuning/
 ├── assets/
 │   ├── architecture.png
 │   ├── IDS_Tuning_Process.png
+│   ├── rules-iteration-2.png
 │   ├── test-suite-passing.png
-│   ├── test-negative-controls.png
-│   ├── sqli-evasion.png
 │   └── infrastructure.png
 ├── attacker/
 │   └── Dockerfile
@@ -198,6 +207,7 @@ suricata-ids-rule-tuning/
 │   └── local.rules
 ├── logs/
 │   └── .gitkeep
+├── .gitattributes
 ├── .gitignore
 ├── LICENSE
 ├── docker-compose.yml
@@ -212,12 +222,16 @@ suricata-ids-rule-tuning/
 - **Threshold engineering:** Understood the practical difference between `threshold: type limit`, `detection_filter`, and `threshold: type both` — and discovered first-hand the notification blind spot that thresholds create.
 - **Signature evasion:** Proved empirically that a `within:` byte-window is evadable by padding, and hardened the rule to match the pattern family instead.
 - **Verification over execution:** Built a test suite that reads `eve.json` by byte offset from inside the container, with positive and negative cases, rather than trusting that "the attack ran."
+- **Unverifiable is not the same as passing:** The suite distinguishes `PASS` / `FAIL` / `ERROR`, so a dead sensor, an attack command that never ran, or a truncated log can never be mistaken for a clean result — the single most important property a detection test can have.
 - **Infrastructure reproducibility:** Diagnosed a non-deterministic bridge name down to Docker's network-ID hashing and pinned it, making the lab reproducible for anyone who clones it.
 - **Threat Intelligence Mapping:** Tagged signatures with MITRE ATT&CK techniques (T1046, T1190) for SOC-standard triage.
 
 ## Known Limitations
 
+- **All three SQLi rules match the normalized `http.uri` buffer only.** Injection delivered in a POST body is not inspected and will not alert — which includes the most common real-world shape of the auth-bypass case (a login form). Covering it means adding `http.request_body` and raising `request-body-limit` in `suricata.yaml`; it is out of scope here but it is the single biggest coverage gap in the ruleset.
 - The tautology rule (1000004) requires a quote marker, so quote-less tautologies in numeric fields are not caught. The blind time-based rule (1000005) is signature-based, so obfuscated delay primitives (nested queries, heavy joins) slip through.
+- Signature overlap is documented, not eliminated: a payload such as `1' OR SLEEP(5)--` legitimately trips both 1000004 and 1000005, producing two alerts for one request. The suite reports the overlap rather than hiding it.
+- The attacker image pins its Alpine base but not the individual package versions, so images built at different times may not be byte-identical.
 - No error-based or out-of-band SQLi coverage; out-of-band detection would require monitoring outbound DNS from the victim.
 - The suite's malformed-JSON handling counts and reports dropped lines, but silent line-dropping is itself a log-evasion vector a production pipeline should alert on.
 - The SYN rule handles ECN via `flags:S,12`, but the suite does not generate ECN traffic to prove that path.
@@ -245,4 +259,3 @@ This project was designed and built jointly by:
 
 - **Jhonny Valdivieso** — [@JhonnyValdivieso](https://github.com/JhonnyValdivieso)
 - **Ricardo** — [@Ricardopirlo](https://github.com/Ricardopirlo)
-
