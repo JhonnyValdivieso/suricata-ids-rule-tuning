@@ -185,39 +185,24 @@ Structured `eve.json` event confirming the sniff interface (`in_iface: lab_br0`)
 
 ```
 suricata-ids-rule-tuning/
-│
-├── 📁 assets/
-│   ├── architecture/
-│   │   └── architecture.png
-│   ├── infrastructure/
-│   │   └── infrastructure.png
-│   └── results/
-│       ├── test-suite-passing.png
-│       ├── test-negative-controls.png
-│       └── sqli-evasion.png
-│
-├── 📁 docker/
-│   ├── attacker/
-│   │   └── Dockerfile
-│   ├── victim/              
-│   │   └── Dockerfile
-│   └── docker-compose.yml   
-│
-├── 📁 suricata/
-│   ├── config/
-│   │   └── suricata.yml     
-│   └── rules/
-│       └── local.rules
-│
-├── 📁 tests/                
-│   └── test_rules.py
-│
-├── 📁 logs/
-│   └── .gitkeep
-│
+├── assets/
+│   ├── architecture.png            # Lab architecture diagram
+│   ├── IDS_Tuning_Process.png      # Tuning process infographic
+│   ├── test-suite-passing.png      # 7/7 verification run
+│   ├── test-negative-controls.png  # Proof the suite detects failures
+│   ├── sqli-evasion.png            # within:20 evasion (before/after)
+│   └── infrastructure.png          # lab_br0 + eve.json telemetry
+├── attacker/
+│   └── Dockerfile                  # Alpine + nmap, curl, iputils
+├── rules/
+│   └── local.rules                 # 5 tuned custom signatures
+├── logs/
+│   └── .gitkeep                    # Keeps the (gitignored) log dir in the repo
 ├── .gitignore
-├── README.md
-└── LICENSE
+├── LICENSE
+├── docker-compose.yml              # 3 services + pinned bridge (lab_br0)
+├── test_rules.py                   # Automated verification suite
+└── README.md
 ```
 
 ---
