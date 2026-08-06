@@ -35,8 +35,12 @@ alert tcp any any -> any any (msg:"[IDS ALERT] Nmap SYN Port Scan"; flow:to_serv
 # 3. SQL Injection - UNION-based
 # Detects `UNION ... SELECT` in the request URI (data-extraction SQLi).
 #   distance:0 with NO `within` -> SELECT may appear ANY distance after UNION.
-# This is the fix validated in the lab: an earlier `within:20` was evadable by
-# padding bytes between UNION and SELECT; distance:0 closes that gap.
+# An earlier version bounded that gap with `within:20`. A byte window is a bound
+# on the SIGNATURE, not on the attack: pad the keywords apart by more than the
+# window (whitespace, an inline /**/ comment) and the injection is unchanged but
+# the rule no longer matches. Removing `within` keeps the ordering constraint and
+# drops the ceiling. NOTE: this is reasoning about `within:` semantics, not a
+# bypass measured in this lab -- see README, Finding #1.
 # Known limitation: matches the normalized http.uri buffer only (not body/POST).
 alert http any any -> any any (msg:"[IDS ALERT] SQLi UNION-based"; flow:to_server,established; http.uri; content:"UNION"; nocase; content:"SELECT"; nocase; distance:0; classtype:web-application-attack; metadata:mitre_tactic Initial-Access, mitre_technique T1190; threshold: type both, track by_src, count 1, seconds 10; sid:1000003; rev:17;)
 
