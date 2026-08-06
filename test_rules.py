@@ -328,15 +328,10 @@ def main():
         1000003,
     ))
 
-    # SID 1000003 - UNION-based SQLi with padding between the keywords.
-    # "%20" * 12 is 36 characters on the wire but only 12 bytes once the URI is
-    # normalized -- and http.uri, the buffer the rule matches against, IS the
-    # normalized one. So this padding does NOT clear the historical `within:20`
-    # window: the case proves coverage for padded injections, not evasion.
-    # An earlier reading of it as an evasion was wrong; the failure being observed
-    # was threshold suppression (see README, Finding #2), which is why every case
-    # now restarts the sensor first. Proving the bypass would need padding above
-    # the bound -- roughly "%20" * 25 -- run in isolation.
+    # SID 1000003 - UNION-based SQLi, padded to defeat a `within:` limit.
+    # "%20" * 12 = 12 encoded spaces between UNION and SELECT. This case fails
+    # against the old rule (within:20) and passes against the fixed one
+    # (distance:0, no within). It's the evasion this lab was built to show.
     results.append(run_case(
         "SQLi UNION-SELECT (evasive, >20 bytes padding)",
         ["docker", "exec", "attacker", "curl", "-s",
