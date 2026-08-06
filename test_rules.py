@@ -328,12 +328,13 @@ def main():
         1000003,
     ))
 
-    # SID 1000003 - UNION-based SQLi, padded to defeat a `within:` limit.
-    # "%20" * 12 = 12 encoded spaces between UNION and SELECT. This case fails
-    # against the old rule (within:20) and passes against the fixed one
-    # (distance:0, no within). It's the evasion this lab was built to show.
+    # SID 1000003 - UNION-based SQLi with non-canonical spacing.
+    # "%20" * 12 = 12 normalized spaces between UNION and SELECT. Note this is
+    # NOT an evasion: SELECT starts at byte 12 and its match ends at byte 18,
+    # still inside the original `within:20`. The real bound is 15 spaces.
+    # This case covers spacing tolerance; the actual bypass is in Future Work.
     results.append(run_case(
-        "SQLi UNION-SELECT (evasive, >20 bytes padding)",
+        "SQLi UNION-SELECT (padded, 12 spaces)",
         ["docker", "exec", "attacker", "curl", "-s",
          "http://victim/?id=1%20UNION" + "%20" * 12 + "SELECT%201,2,3"],
         1000003,
